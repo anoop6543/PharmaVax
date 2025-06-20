@@ -1,0 +1,82 @@
+# Ignore Visual Studio and .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vs/
+.vscode/
+*.csproj.user
+*.csproj.nuget.g.props
+*.csproj.nuget.g.targets
+*.dll
+*.exe
+*.pdb
+*.cache
+*.log
+*.ide
+
+# Ignore NuGet packages
+*.nupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Ignore build results
+*.build/
+*.publish/
+*.deploy/
+
+# Ignore TwinCAT/Beckhoff-specific files
+*.tclrs/
+*.tmc
+*.tpy
+*.xti
+*.plcproj.user
+*.tsproj.user
+*.bootdata
+*.tmproj
+*.TcLog
+*.TcConfig
+*.TcRuntime
+*.TcUnit/
+*.TcPOU/
+*.TcDUT/
+*.TcGVL/
+*.TcVISU/
+*.TcCOM/
+*.TcIO/
+*.TcModule/
+*.TcLibrary/
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.old
+*.swp
+*.DS_Store
+Thumbs.db
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ignore logs and debug files
+*.log
+*.trace
+*.dmp
+*.mdmp
+
+# Ignore IDE-specific files
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Ignore other unnecessary files
+*.~*
+*.orig
+*.rej
