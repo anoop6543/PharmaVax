@@ -1,6 +1,7 @@
 using PharmaceuticalProcess.HardwareComponents.Actuators;
 using PharmaceuticalProcess.HardwareComponents.Core;
 using PharmaceuticalProcess.HardwareComponents.Sensors;
+using PharmaVax.HardwareComponents.Controllers;
 using System;
 using System.Collections.Generic;
 

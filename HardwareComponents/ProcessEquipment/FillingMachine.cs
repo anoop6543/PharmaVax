@@ -1,6 +1,7 @@
 using PharmaceuticalProcess.HardwareComponents.Actuators;
 using PharmaceuticalProcess.HardwareComponents.Core;
 using PharmaceuticalProcess.HardwareComponents.Sensors;
+using PharmaVax.HardwareComponents.Controllers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -55,7 +56,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 		private WeightSensor _checkweigher;
 		private ParticleSensor _particleCounter;
 		private PressureSensor _pressureSensor;
-		private List<VisionSystem> _visionSystems;
+		private List<VialInspectionSystem> _visionSystems;
 
 		// Internal state tracking
 		private Queue<Vial> _vialsInProcess;
@@ -78,7 +79,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			double maxFillingSpeed,
 			int needleCount,
 			VialFormat initialVialFormat = VialFormat.Standard10mL,
-			PumpController fillingPump = null,
+            PumpController fillingPump = null,
 			MotorController conveyorMotor = null)
 			: base(deviceId, name)
 		{
@@ -91,7 +92,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			// Initialize connected devices
 			_fillingPump = fillingPump;
 			_conveyorMotor = conveyorMotor;
-			_visionSystems = new List<VisionSystem>();
+			_visionSystems = new List<VialInspectionSystem>();
 
 			// Initialize process state
 			CurrentState = FillingMachineState.Idle;
@@ -958,9 +959,9 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 		/// <summary>
 		/// Connect vision systems for inspection
 		/// </summary>
-		public void ConnectVisionSystems(List<VisionSystem> visionSystems)
+		public void ConnectVisionSystems(List<VialInspectionSystem> visionSystems)
 		{
-			_visionSystems = visionSystems ?? new List<VisionSystem>();
+			_visionSystems = visionSystems ?? new List<VialInspectionSystem>();
 		}
 
 		#endregion
@@ -1082,7 +1083,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 	/// <summary>
 	/// Simulates a vision system for vial inspection
 	/// </summary>
-	public class VisionSystem : DeviceBase
+	public class VialInspectionSystem : DeviceBase
 	{
 		public override DeviceType Type => DeviceType.Sensor;
 
@@ -1091,7 +1092,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 		public int FalsePositiveRate { get; private set; } // per 10,000
 		public int FalseNegativeRate { get; private set; } // per 10,000
 
-		public VisionSystem(string deviceId, string name, VisionInspectionType inspectionType)
+		public VialInspectionSystem(string deviceId, string name, VisionInspectionType inspectionType)
 			: base(deviceId, name)
 		{
 			InspectionType = inspectionType;
