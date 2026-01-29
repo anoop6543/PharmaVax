@@ -45,7 +45,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 		private MotorController _driveMotor;
 		private ValveController _feedValve;
 		private ValveController _dischargeValve;
-		private ValveController _wasteValve;
+		private ValveController? _wasteValve;
 		private FlowMeter _feedFlowMeter;
 		private FlowMeter _dischargeFlowMeter;
 

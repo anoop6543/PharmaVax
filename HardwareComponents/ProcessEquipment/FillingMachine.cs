@@ -8,6 +8,127 @@ using System.Linq;
 namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 {
 	/// <summary>
+	/// Represents a pharmaceutical vial that can be filled, inspected, and processed
+	/// </summary>
+	public class Vial
+	{
+		// Vial properties
+		public Guid Id { get; } = Guid.NewGuid();
+		public VialFormat Format { get; }
+		public double TareWeight { get; } // Weight of empty vial in grams
+		public double FillVolume { get; private set; } // Volume in mL
+		public double TotalWeight => TareWeight + FillVolume; // Assuming density of 1g/mL
+		public bool HasStopper { get; private set; }
+		public bool HasCap { get; private set; }
+		public bool HasLabel { get; private set; }
+		
+		// Process tracking
+		public bool Rejected { get; private set; }
+		public RejectReason RejectReason { get; private set; } = RejectReason.None;
+		public VialProcessStep CurrentStep { get; private set; }
+		public DateTime CreationTime { get; } = DateTime.Now;
+		public double Position { get; set; } // Position on conveyor in mm
+		
+		// Quality attributes
+		public bool IsContaminated { get; set; }
+		public bool HasCosmeticDefect { get; set; }
+		public bool HasStopperDefect { get; set; }
+		public bool HasCapDefect { get; set; }
+
+		/// <summary>
+		/// Creates a new vial of the specified format
+		/// </summary>
+		public Vial(VialFormat format)
+		{
+			Format = format;
+			
+			// Set tare weight based on vial format
+			TareWeight = format switch
+			{
+				VialFormat.Standard2mL => 3.5,
+				VialFormat.Standard5mL => 5.2,
+				VialFormat.Standard10mL => 7.8,
+				VialFormat.Standard20mL => 12.5,
+				VialFormat.Standard50mL => 22.0,
+				_ => 7.8 // Default to 10mL vial
+			};
+			
+			CurrentStep = VialProcessStep.Created;
+		}
+		
+		/// <summary>
+		/// Fills the vial with the specified volume
+		/// </summary>
+		public void Fill(double volume)
+		{
+			FillVolume = volume;
+			CurrentStep = VialProcessStep.Filled;
+		}
+		
+		/// <summary>
+		/// Adds a stopper to the vial
+		/// </summary>
+		public void AddStopper(bool defective = false)
+		{
+			HasStopper = true;
+			HasStopperDefect = defective;
+			CurrentStep = VialProcessStep.Stoppered;
+		}
+		
+		/// <summary>
+		/// Adds a cap to the vial
+		/// </summary>
+		public void AddCap(bool defective = false)
+		{
+			HasCap = true;
+			HasCapDefect = defective;
+			CurrentStep = VialProcessStep.Capped;
+		}
+		
+		/// <summary>
+		/// Adds a label to the vial
+		/// </summary>
+		public void AddLabel(bool defective = false)
+		{
+			HasLabel = true;
+			CurrentStep = VialProcessStep.Labeled;
+		}
+		
+		/// <summary>
+		/// Marks the vial as rejected for the specified reason
+		/// </summary>
+		public void Reject(RejectReason reason)
+		{
+			Rejected = true;
+			RejectReason = reason;
+			CurrentStep = VialProcessStep.Rejected;
+		}
+		
+		/// <summary>
+		/// Marks the vial as inspected and accepted
+		/// </summary>
+		public void Accept()
+		{
+			CurrentStep = VialProcessStep.Accepted;
+		}
+	}
+	
+	/// <summary>
+	/// Represents the processing steps a vial goes through
+	/// </summary>
+	public enum VialProcessStep
+	{
+		Created,
+		Filled,
+		Stoppered,
+		Capped,
+		Labeled,
+		Inspected,
+		Accepted,
+		Rejected
+	}
+
+	/// <summary>
 	/// Simulates an aseptic filling machine used for pharmaceutical product filling operations
 	/// </summary>
 	public class FillingMachine : DeviceBase
@@ -55,7 +176,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 		private WeightSensor _checkweigher;
 		private ParticleSensor _particleCounter;
 		private PressureSensor _pressureSensor;
-		private List<VisionSystem> _visionSystems;
+		private List<VialInspectionSystem> _visionSystems;
 
 		// Internal state tracking
 		private Queue<Vial> _vialsInProcess;
@@ -78,7 +199,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			double maxFillingSpeed,
 			int needleCount,
 			VialFormat initialVialFormat = VialFormat.Standard10mL,
-			PumpController fillingPump = null,
+            PumpController fillingPump = null,
 			MotorController conveyorMotor = null)
 			: base(deviceId, name)
 		{
@@ -91,7 +212,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			// Initialize connected devices
 			_fillingPump = fillingPump;
 			_conveyorMotor = conveyorMotor;
-			_visionSystems = new List<VisionSystem>();
+			_visionSystems = new List<VialInspectionSystem>();
 
 			// Initialize process state
 			CurrentState = FillingMachineState.Idle;
@@ -244,9 +365,11 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			// Initialize connected devices
 			_fillingPump?.Initialize();
 			_conveyorMotor?.Initialize();
-			_checkweigher?.Initialize();
-			_particleCounter?.Initialize();
-			_pressureSensor?.Initialize();
+			
+			// Update parameters from connected sensors
+			_checkweigher?.Update(TimeSpan.Zero);
+			_particleCounter?.Update(TimeSpan.Zero);
+			_pressureSensor?.Update(TimeSpan.Zero);
 
 			foreach (var visionSystem in _visionSystems)
 			{
@@ -377,7 +500,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			}
 
 			// Update differential pressure
-			if (_pressureSensor != null && _pressureSensor.Status == DeviceStatus.Running)
+			if (_pressureSensor != null)
 			{
 				DifferentialPressure = _pressureSensor.Pressure;
 			}
@@ -497,6 +620,14 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			RemainingVolume -= actualFillVolume / 1000.0; // Convert mL to L
 			RemainingVolume = Math.Max(0, RemainingVolume);
 
+			// Create a new vial and track it
+			Vial vial = new Vial(CurrentVialFormat);
+			vial.Fill(actualFillVolume);
+			
+			// Apply stopper and cap
+			vial.AddStopper(!StopperFeederActive || (Random.NextDouble() < 0.002));
+			vial.AddCap(!CapFeederActive || (Random.NextDouble() < 0.003));
+			
 			// Check if vial passes quality criteria
 			bool rejected = false;
 			RejectReason rejectReason = RejectReason.None;
@@ -508,6 +639,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 				{
 					rejected = true;
 					rejectReason = RejectReason.Contamination;
+					vial.IsContaminated = true;
 				}
 			}
 
@@ -521,13 +653,13 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			}
 
 			// Check for stopper or cap problems
-			if (!StopperFeederActive || (Random.NextDouble() < 0.002)) // 0.2% chance of stopper issue
+			if (vial.HasStopperDefect)
 			{
 				rejected = true;
 				rejectReason = RejectReason.StopperDefect;
 			}
 
-			if (!CapFeederActive || (Random.NextDouble() < 0.003)) // 0.3% chance of cap issue
+			if (vial.HasCapDefect)
 			{
 				rejected = true;
 				rejectReason = RejectReason.CapDefect;
@@ -538,6 +670,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			{
 				rejected = true;
 				rejectReason = RejectReason.CosmeticDefect;
+				vial.HasCosmeticDefect = true;
 			}
 
 			// Update counters
@@ -545,11 +678,16 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 			{
 				VialsRejected++;
 				RejectReasonCounts[rejectReason]++;
+				vial.Reject(rejectReason);
 			}
 			else
 			{
 				VialsFilled++;
+				vial.Accept();
 			}
+
+			// Add to processing queue
+			_vialsInProcess.Enqueue(vial);
 
 			// Calculate reject rate
 			int totalVials = VialsFilled + VialsRejected;
@@ -558,10 +696,8 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 				RejectRate = (double)VialsRejected / totalVials * 100.0;
 			}
 
-			// Calculate weight (for checkweigher)
-			// Assuming product density of 1g/mL plus vial tare weight
-			double vialTareWeight = GetVialTareWeight(CurrentVialFormat);
-			LastMeasuredWeight = vialTareWeight + actualFillVolume;
+			// Update weight (for checkweigher)
+			LastMeasuredWeight = vial.TotalWeight;
 
 			// Update checkweigher if available
 			if (_checkweigher != null && _checkweigher.Status == DeviceStatus.Running)
@@ -958,9 +1094,9 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 		/// <summary>
 		/// Connect vision systems for inspection
 		/// </summary>
-		public void ConnectVisionSystems(List<VisionSystem> visionSystems)
+		public void ConnectVisionSystems(List<VialInspectionSystem> visionSystems)
 		{
-			_visionSystems = visionSystems ?? new List<VisionSystem>();
+			_visionSystems = visionSystems ?? new List<VialInspectionSystem>();
 		}
 
 		#endregion
@@ -1001,7 +1137,9 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 					AddAlarm("VISION_SYSTEM_FAULT", "Inspection camera system failure", AlarmSeverity.Major);
 					if (_visionSystems.Count > 0)
 					{
-						_visionSystems[Random.Next(_visionSystems.Count)].SimulateFault();
+						// Access the SimulateFault method through our public method
+						int index = Random.Next(_visionSystems.Count);
+						_visionSystems[index].SimulateCameraFault();
 					}
 					break;
 
@@ -1082,7 +1220,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 	/// <summary>
 	/// Simulates a vision system for vial inspection
 	/// </summary>
-	public class VisionSystem : DeviceBase
+	public class VialInspectionSystem : DeviceBase
 	{
 		public override DeviceType Type => DeviceType.Sensor;
 
@@ -1091,7 +1229,7 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 		public int FalsePositiveRate { get; private set; } // per 10,000
 		public int FalseNegativeRate { get; private set; } // per 10,000
 
-		public VisionSystem(string deviceId, string name, VisionInspectionType inspectionType)
+		public VialInspectionSystem(string deviceId, string name, VisionInspectionType inspectionType)
 			: base(deviceId, name)
 		{
 			InspectionType = inspectionType;
@@ -1163,6 +1301,13 @@ namespace PharmaceuticalProcess.HardwareComponents.ProcessEquipment
 
 			// No rejection
 			return false;
+		}
+		
+		// Public method to allow external fault simulation
+		public void SimulateCameraFault()
+		{
+			// Call the protected method
+			SimulateFault();
 		}
 
 		protected override void SimulateFault()
